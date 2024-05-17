@@ -177,7 +177,7 @@ public class NomalSaber : EditorWindow
 
             var pathAnimatorController = "Assets/Qychui/VRCBS/NormalSaber/Animator/SaberAnimatorController.controller";
 
-            AnimatorController animatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(pathAnimatorController);
+            var animatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(pathAnimatorController);
 
             fxController = AnimatorCloner.MergeControllers(fxController, animatorController);
 
@@ -238,6 +238,23 @@ public class NomalSaber : EditorWindow
         var descriptor = userAvatar.GetComponent<VRCAvatarDescriptor>();
         var expressionParameters = descriptor.expressionParameters;
         var expressionsMenu = descriptor.expressionsMenu;
+
+        var pathAnimatorController = "Assets/Qychui/VRCBS/NormalSaber/SaberMainMenu.asset";
+        var getedExpressionsMenu = AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(pathAnimatorController);
+
+        if (expressionParameters != null && expressionsMenu !=null)
+        {
+            if (expressionsMenu.controls.Count < 8)
+            {
+                var subMeun= new VRCExpressionsMenu.Control()
+                {
+                    name = "SaberManager",
+                    type = VRCExpressionsMenu.Control.ControlType.SubMenu,
+                };
+
+                expressionsMenu.controls.Add(subMeun);
+            }
+        }
     }
 
     /// <summary>
