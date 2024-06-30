@@ -1,9 +1,15 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using UnityEditor.Animations;
-using System.Collections.Generic;
 using AV3Manager;
 using System;
+using Unity.VisualScripting;
+using HarmonyLib;
+using System.Collections.Generic;
+
+
+
+
 
 
 #if VRC_SDK_VRCSDK3
@@ -37,7 +43,9 @@ public class NomalSaber : EditorWindow
     private float GetSaberMaxSize = 0;
     private Vector3 GetMaxLengthAxis = Vector3.zero;
 
-    [MenuItem("Qychui/NomalSaber")]
+    int GlobalTotalParameter = 0;
+
+    [MenuItem("Qychui/1.NomalSaber")]
     public static void ShowWindows()
     {
         var window = GetWindow<NomalSaber>("NomalSaber");
@@ -77,6 +85,27 @@ public class NomalSaber : EditorWindow
         userAvatar = EditorGUILayout.ObjectField("模型", userAvatar, typeof(GameObject), true) as GameObject;
         EditorGUILayout.Space();
 
+        if (userAvatar != null)
+        {
+            var descriptor = userAvatar.GetComponent<VRCAvatarDescriptor>();
+            var expressionParameters = descriptor.expressionParameters;
+
+            var totalMemory = 0;
+
+            foreach (var parameter in expressionParameters.parameters)
+            {
+                totalMemory = totalMemory + parameter.valueType.ToString() switch
+                {
+                    "Int" => 8,
+                    "Float" => 8,
+                    "Bool" => 1,
+                    _ => 0
+                };
+            }
+
+            GlobalTotalParameter = totalMemory;
+        }
+
         saberObjectL = EditorGUILayout.ObjectField("左手光剑", saberObjectL, typeof(GameObject), true) as GameObject;
         EditorGUILayout.Space();
         saberObjectR = EditorGUILayout.ObjectField("右手光剑", saberObjectR, typeof(GameObject), true) as GameObject;
@@ -97,6 +126,11 @@ public class NomalSaber : EditorWindow
         }
 
         //TODO:
+        EditorGUILayout.Space();
+
+        EditorGUILayout.HelpBox("安装需要消耗114数值的Parameter", MessageType.Info);
+        EditorGUILayout.LabelField($"当前可用值 {GlobalTotalParameter} + 114 : 256");
+
         EditorGUILayout.Space();
 
         if (GUILayout.Button("安装"))
@@ -175,48 +209,11 @@ public class NomalSaber : EditorWindow
             //var baseAnimationLayers = descriptor.baseAnimationLayers;
             //Debug.Log(fxController.name);
 
-            var pathAnimatorController = "Assets/Qychui/VRCBS/NormalSaber/Animator/SaberAnimatorController.controller";
+            var pathAnimatorController = "Assets/Qychui/VRCSaberToolsManager/NormalSaber/Animator/SaberAnimatorController.controller";
 
             var animatorController = AssetDatabase.LoadAssetAtPath<AnimatorController>(pathAnimatorController);
 
             fxController = AnimatorCloner.MergeControllers(fxController, animatorController);
-
-            //复制状态机
-            //for (int i = 0; i < animatorController.layers.Length; i++)
-            //{
-            //    var sourceLayer = animatorController.layers[i];
-            //    var targetLayer = new AnimatorControllerLayer()
-            //    {
-            //        name = sourceLayer.name,
-            //        avatarMask = sourceLayer.avatarMask,
-            //        blendingMode = sourceLayer.blendingMode,
-            //        iKPass = sourceLayer.iKPass,
-            //        syncedLayerAffectsTiming = sourceLayer.syncedLayerAffectsTiming,
-            //        defaultWeight = sourceLayer.defaultWeight,
-            //        stateMachine = new AnimatorStateMachine(),
-            //    };
-            //    fxController.AddLayer(targetLayer);
-            //    CopyStates(sourceLayer.stateMachine, targetLayer.stateMachine);
-            //}
-
-            //foreach (AnimatorControllerParameter parameter in animatorController.parameters)
-            //{
-            //    switch (parameter.type)
-            //    {
-            //        case AnimatorControllerParameterType.Bool:
-            //            fxController.AddParameter(parameter.name, AnimatorControllerParameterType.Bool);
-            //            break;
-            //        case AnimatorControllerParameterType.Float:
-            //            fxController.AddParameter(parameter.name, AnimatorControllerParameterType.Float);
-            //            break;
-            //        case AnimatorControllerParameterType.Int:
-            //            fxController.AddParameter(parameter.name, AnimatorControllerParameterType.Int);
-            //            break;
-            //        case AnimatorControllerParameterType.Trigger:
-            //            fxController.AddParameter(parameter.name, AnimatorControllerParameterType.Trigger);
-            //            break;
-            //    }
-            //}
 
             EditorUtility.SetDirty(fxController);
 
@@ -236,24 +233,63 @@ public class NomalSaber : EditorWindow
     private void MergeDemo()
     {
         var descriptor = userAvatar.GetComponent<VRCAvatarDescriptor>();
-        var expressionParameters = descriptor.expressionParameters;
         var expressionsMenu = descriptor.expressionsMenu;
+        var expressionParameters = descriptor.expressionParameters;
 
-        var pathAnimatorController = "Assets/Qychui/VRCBS/NormalSaber/SaberMainMenu.asset";
-        var getedExpressionsMenu = AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(pathAnimatorController);
+        var pathExpressionsMenu = "Assets/Qychui/VRCSaberToolsManager/NormalSaber/SaberMainMenu.asset";
+        var getedExpressionsMenu = AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(pathExpressionsMenu);
 
-        if (expressionParameters != null && expressionsMenu !=null)
+        var pathParamaters = "Assets/Qychui/VRCSaberToolsManager/NormalSaber/SaberParameters.asset";
+        var getedParamaters = AssetDatabase.LoadAssetAtPath<VRCExpressionParameters>(pathParamaters);
+
+        if (expressionParameters != null && expressionsMenu != null)
         {
             if (expressionsMenu.controls.Count < 8)
             {
-                var subMeun= new VRCExpressionsMenu.Control()
+                foreach (var control in expressionsMenu.controls)
+                {
+                    if (control.name == "SaberManager")
+                    {
+                        goto HaveMenu;
+                    }
+                }
+
+                var subMeun = new VRCExpressionsMenu.Control()
                 {
                     name = "SaberManager",
                     type = VRCExpressionsMenu.Control.ControlType.SubMenu,
+                    subMenu = getedExpressionsMenu
                 };
 
                 expressionsMenu.controls.Add(subMeun);
             }
+
+            HaveMenu:
+
+            //判断值是否超过
+            if (GlobalTotalParameter + 114 > 256)
+            {
+                return;
+            }
+
+            List<VRCExpressionParameters.Parameter> newParameters = new List<VRCExpressionParameters.Parameter>();
+
+            foreach (var parameter in expressionParameters.parameters)
+            {
+                newParameters.Add(parameter);
+            }
+
+            foreach (var metaPar in getedParamaters.parameters)
+            {
+                var vrcExpressionParameter = expressionParameters.FindParameter(metaPar.name);
+
+                if (vrcExpressionParameter is null)
+                {
+                    newParameters.Add(metaPar);
+                }
+            }
+
+            expressionParameters.parameters = newParameters.ToArray();
         }
     }
 
@@ -266,62 +302,6 @@ public class NomalSaber : EditorWindow
     {
         //作者太菜了，自己写了几天写不出来
         //Copy from https://github.com/VRLabs/Avatars-3.0-Manager/tree/2.0.28
-
-        //复制动画状态
-        //foreach (ChildAnimatorState state in sourceMachine.states)
-        //{
-        //    var newState = new AnimatorState()
-        //    {
-        //        name = state.state.name,
-        //        motion = state.state.motion,
-        //        transitions = state.state.transitions,
-        //    };
-
-
-
-        //    foreach (var transition in state.state.transitions)
-        //    {
-        //        //var newTransition = new AnimatorStateTransition()
-        //        //{
-        //        //    name = transition.name,
-        //        //    hasExitTime = transition.hasExitTime,
-        //        //    exitTime = transition.exitTime,
-        //        //    hasFixedDuration = transition.hasFixedDuration,
-        //        //    offset = transition.offset,
-        //        //    interruptionSource = transition.interruptionSource,
-        //        //    orderedInterruption = transition.orderedInterruption,
-        //        //    canTransitionToSelf = transition.canTransitionToSelf,
-        //        //    isExit = transition.isExit,
-        //        //    conditions = transition.conditions,
-        //        //};
-
-        //        newState.transitions.Append(transition);
-
-        //    }
-
-        //    targetMachine.AddState(newState, state.position);
-        //}
-
-        //targetMachine.anyStateTransitions = sourceMachine.anyStateTransitions;
-
-        //for (int i = 0; i < sourceMachine.anyStateTransitions.Length; i++)
-        //{
-        //    targetMachine.anyStateTransitions[i] = sourceMachine.anyStateTransitions[i];
-        //}
-        //foreach (var item in sourceMachine.anyStateTransitions)
-        //{
-        //    targetMachine.anyStateTransitions.Append(item);
-        //}
-
-
-        //复制子状态机
-        //foreach (ChildAnimatorStateMachine subMachine in sourceMachine.stateMachines)
-        //{
-        //    var newSubMachine = new AnimatorStateMachine();
-        //    newSubMachine.name = subMachine.stateMachine.name;
-        //    targetMachine.AddStateMachine(subMachine.stateMachine, subMachine.position);
-        //    CopyStates(subMachine.stateMachine, newSubMachine);
-        //}
     }
 
     // TODO():获取光剑轴前判断前面是否有一层空物体
